@@ -5,12 +5,10 @@ import (
 	"code.google.com/p/plotinum/plotter"
 	"code.google.com/p/plotinum/plotutil"
 	"code.google.com/p/plotinum/vg"
-	"code.google.com/p/plotinum/vg/vgsvg"
 	"fmt"
 	"github.com/aybabtme/benchkit"
 	"github.com/dustin/go-humanize"
 	"image/color"
-	"io"
 	"runtime"
 )
 
@@ -65,11 +63,11 @@ var datalines = []struct {
 	},
 }
 
-func plotSVG(w io.Writer, n int, size string, results *benchkit.MemResult) error {
+func makePlot(n int, size string, results *benchkit.MemResult) (*plot.Plot, error) {
 
 	p, err := plot.New()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	p.Title.Text = fmt.Sprintf("Effective memory usage of archive/tar for %d files (%s each)", n, size)
@@ -82,7 +80,7 @@ func plotSVG(w io.Writer, n int, size string, results *benchkit.MemResult) error
 	for _, data := range datalines {
 		line, err := plotter.NewLine(mapResult(data.Filter, results.AfterEach))
 		if err != nil {
-			return err
+			return nil, err
 		}
 		line.Width = vg.Points(data.Width)
 		line.Color = data.Color
@@ -90,10 +88,7 @@ func plotSVG(w io.Writer, n int, size string, results *benchkit.MemResult) error
 		p.Legend.Add(data.Name, line)
 	}
 
-	svg := vgsvg.New(vg.Points(width), vg.Points(height))
-	p.Draw(plot.MakeDrawArea(svg))
-	_, err = svg.WriteTo(w)
-	return err
+	return p, nil
 }
 
 func mapResult(f func(mem *runtime.MemStats) float64, mems []*runtime.MemStats) plotter.XYs {

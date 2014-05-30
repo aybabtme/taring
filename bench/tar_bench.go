@@ -48,13 +48,21 @@ func effectMem(mem *runtime.MemStats) string {
 
 func main() {
 	var (
-		n       int
-		sizeStr string
-		discard bool
+		n        int
+		sizeStr  string
+		discard  bool
+		plotfile string
+		plottype string
+		height   float64
+		width    float64
 	)
 	flag.IntVar(&n, "n", 0, "number of files to tar")
 	flag.StringVar(&sizeStr, "size", "0", "size of files to tar")
 	flag.BoolVar(&discard, "discard", false, "tar the file to /dev/null instead of a memory buffer")
+	flag.StringVar(&plotfile, "plotfile", "tar", "prefix of the plot file")
+	flag.StringVar(&plottype, "plottype", "svg", "extension of the plot to produce")
+	flag.Float64Var(&height, "height", 600, "height of the plot to generate")
+	flag.Float64Var(&width, "width", 800, "width of the plot to generate")
 	flag.Parse()
 
 	size, err := humanize.ParseBytes(sizeStr)
@@ -88,15 +96,15 @@ func main() {
 	results := doBenchmark(n, int(size), dst)
 	infof("done benchmark: %v", time.Since(start))
 
-	buf := bytes.NewBuffer(nil)
 	infof("plotting...")
-	if err := plotSVG(buf, n, sizeStr, results); err != nil {
-		fatalf("couldn't plot results to SVG: %v", err)
+	p, err := makePlot(n, sizeStr, results)
+	if err != nil {
+		fatalf("couldn't plot results: %v", err)
 	}
 
-	filename := fmt.Sprintf("tar_bench_n%d_size%s.svg", n, sizeStr)
+	filename := fmt.Sprintf("%s_n%d_size%s.%s", plotfile, n, sizeStr, plottype)
 	infof("saving plot to %q...", filename)
-	if err := ioutil.WriteFile(filename, buf.Bytes(), 0644); err != nil {
+	if err := p.Save(width, height, filename); err != nil {
 		fatalf("couldn't save plot to %q: %v", filename, err)
 	}
 }
