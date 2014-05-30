@@ -3,6 +3,7 @@ package main
 import (
 	"archive/tar"
 	"bytes"
+	"code.google.com/p/plotinum/vg"
 	"flag"
 	"fmt"
 	"github.com/aybabtme/benchkit"
@@ -104,7 +105,10 @@ func main() {
 
 	filename := fmt.Sprintf("%s_n%d_size%s.%s", plotfile, n, sizeStr, plottype)
 	infof("saving plot to %q...", filename)
-	if err := p.Save(width, height, filename); err != nil {
+
+	w := vg.Points(width).Inches()
+	h := vg.Points(height).Inches()
+	if err := p.Save(w, h, filename); err != nil {
 		fatalf("couldn't save plot to %q: %v", filename, err)
 	}
 }

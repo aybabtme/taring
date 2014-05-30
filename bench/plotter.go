@@ -12,11 +12,6 @@ import (
 	"runtime"
 )
 
-const (
-	width  = 800.0
-	height = 600.0
-)
-
 var darkIdx = 0
 
 func pickDark() color.Color {
