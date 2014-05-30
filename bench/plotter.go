@@ -1,0 +1,117 @@
+package main
+
+import (
+	"code.google.com/p/plotinum/plot"
+	"code.google.com/p/plotinum/plotter"
+	"code.google.com/p/plotinum/plotutil"
+	"code.google.com/p/plotinum/vg"
+	"code.google.com/p/plotinum/vg/vgsvg"
+	"fmt"
+	"github.com/aybabtme/benchkit"
+	"github.com/dustin/go-humanize"
+	"image/color"
+	"io"
+	"runtime"
+)
+
+const (
+	width  = 800.0
+	height = 600.0
+)
+
+var darkIdx = 0
+
+func pickDark() color.Color {
+	defer func() { darkIdx = (darkIdx + 1) % len(plotutil.DarkColors) }()
+	return plotutil.DarkColors[darkIdx]
+}
+
+var softIdx = 0
+
+func pickSoft() color.Color {
+	defer func() { softIdx = (softIdx + 1) % len(plotutil.SoftColors) }()
+	return plotutil.SoftColors[softIdx]
+}
+
+var datalines = []struct {
+	Name   string
+	Filter func(mem *runtime.MemStats) float64
+	Width  float64
+	Color  color.Color
+}{
+	{
+		Name:   "current heap size",
+		Filter: func(mem *runtime.MemStats) float64 { return float64(mem.HeapAlloc) },
+		Width:  0.5,
+		Color:  pickDark(),
+	},
+	{
+		Name:   "total heap size",
+		Filter: func(mem *runtime.MemStats) float64 { return float64(mem.HeapSys) },
+		Width:  0.5,
+		Color:  pickDark(),
+	},
+	{
+		Name:   "memory allocated from OS",
+		Filter: func(mem *runtime.MemStats) float64 { return float64(mem.Sys) },
+		Width:  0.5,
+		Color:  pickDark(),
+	},
+	{
+		Name:   "effective memory consumption of the program",
+		Filter: func(mem *runtime.MemStats) float64 { return float64(mem.Sys - mem.HeapReleased) },
+		Width:  0.5,
+		Color:  pickDark(),
+	},
+}
+
+func plotSVG(w io.Writer, n int, size string, results *benchkit.MemResult) error {
+
+	p, err := plot.New()
+	if err != nil {
+		return err
+	}
+
+	p.Title.Text = fmt.Sprintf("Effective memory usage of archive/tar for %d files (%s each)", n, size)
+	p.Y.Label.Text = "Memory usage"
+	p.Y.Tick.Marker = readableBytes(p.Y.Tick.Marker)
+	p.X.Label.Text = fmt.Sprintf("Number of %s files in archive", size)
+
+	p.Add(plotter.NewGrid())
+
+	for _, data := range datalines {
+		line, err := plotter.NewLine(mapResult(data.Filter, results.AfterEach))
+		if err != nil {
+			return err
+		}
+		line.Width = vg.Points(data.Width)
+		line.Color = data.Color
+		p.Add(line)
+		p.Legend.Add(data.Name, line)
+	}
+
+	svg := vgsvg.New(vg.Points(width), vg.Points(height))
+	p.Draw(plot.MakeDrawArea(svg))
+	_, err = svg.WriteTo(w)
+	return err
+}
+
+func mapResult(f func(mem *runtime.MemStats) float64, mems []*runtime.MemStats) plotter.XYs {
+	xys := make(plotter.XYs, len(mems))
+	for i, mem := range mems {
+		xys[i].X = float64(i)
+		xys[i].Y = f(mem)
+	}
+	return xys
+}
+
+func readableBytes(marker func(min, max float64) []plot.Tick) func(float64, float64) []plot.Tick {
+	return func(min, max float64) []plot.Tick {
+		var out []plot.Tick
+		for _, t := range marker(min, max) {
+			t.Label = humanize.Bytes(uint64(t.Value))
+			out = append(out, t)
+		}
+		return out
+	}
+}
